@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use cc::Build;
 
 #[cfg(feature = "pkg-config")]
 fn pkg_config(probe: &str, is_static: bool) -> Vec<PathBuf> {
@@ -43,7 +44,7 @@ fn get_lib_dir(lib_name: &str) -> String {
 
 // Use `alt_name` when the project and its library have different names, such as bzip2 which has
 // `libbz2` as opposed to `libbzip2`.
-fn link_lib(lib_name: &str, alt_name: Option<&str>) {
+fn link_lib(lib_name: &str, alt_name: Option<&str>, pkg_name: Option<&str>) {
     #[cfg(feature = "static")]
     const LINK_TYPE: &str = "static";
     #[cfg(feature = "static")]
@@ -54,35 +55,81 @@ fn link_lib(lib_name: &str, alt_name: Option<&str>) {
     const IS_STATIC: bool = false;
 
     if cfg!(feature = "pkg-config") {
-        pkg_config(lib_name, IS_STATIC);
+        pkg_config(pkg_name.unwrap_or(lib_name), IS_STATIC);
     } else {
         let lib_dir = get_lib_dir(lib_name);
         verify_lib_dir(&lib_dir);
         println!("cargo:rustc-link-search=native={}", lib_dir);
+        println!(
+            "cargo:rustc-link-lib={}={}",
+            LINK_TYPE,
+            alt_name.unwrap_or(lib_name)
+        );
+    }
+}
+
+fn link_cpp() {
+    let mut build = Build::new();
+    let tool = build.get_compiler();
+    println!("IS LIKE {} {} {}", tool.is_like_gnu(), tool.is_like_clang(), tool.is_like_msvc());
+    let stdlib = if tool.is_like_gnu() {
+        "libstdc++.a"
+    } else if tool.is_like_clang() {
+        "libc++.a"
+    } else {
+        // Don't link to c++ statically on windows.
+        return;
+    };
+    let output = tool
+        .to_command()
+        .arg("--print-file-name")
+        .arg(stdlib)
+        .output()
+        .unwrap();
+    if !output.status.success() || output.stdout.is_empty() {
+        // fallback to dynamically
+        return;
+    }
+    let path = match std::str::from_utf8(&output.stdout) {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => return,
+    };
+    if !path.is_absolute() {
+        return;
+    }
+    // remove lib prefix and .a postfix.
+    let libname = &stdlib[3..stdlib.len() - 2];
+    // optional static linking
+    if cfg!(feature = "static_libcpp") {
+        println!("cargo:rustc-link-lib={}", &libname);
+    } else {
+        println!("cargo:rustc-link-lib=dylib={}", &libname);
     }
     println!(
-        "cargo:rustc-link-lib={}={}",
-        LINK_TYPE,
-        alt_name.unwrap_or(lib_name)
+        "cargo:rustc-link-search=native={}",
+        path.parent().unwrap().display()
     );
+    build.cpp_link_stdlib(None);
 }
 
 pub fn link_dependencies() {
     #[cfg(feature = "bzip2")]
-    link_lib("bzip2", Some("bz2"));
+    link_lib("bzip2", Some("bz2"), None);
     #[cfg(feature = "lz4")]
-    link_lib("lz4", None);
+    link_lib("lz4", None, Some("liblz4"));
     // liblz4
     #[cfg(feature = "snappy")]
-    link_lib("snappy", None);
+    link_lib("snappy", None, None);
     // snappy
     #[cfg(feature = "zlib")]
-    link_lib("zlib", Some("z"));
+    link_lib("zlib", Some("z"), None);
     // zlib
     #[cfg(feature = "zstd")]
-    link_lib("zstd", None);
+    link_lib("zstd", None, Some("libzstd"));
     // "libzstd"
 
     // rocksdb
-    link_lib("rocksdb", None);
+    link_lib("rocksdb", None, None);
+
+    link_cpp();
 }
