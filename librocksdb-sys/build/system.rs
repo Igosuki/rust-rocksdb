@@ -2,17 +2,16 @@ use std::path::PathBuf;
 use cc::Build;
 
 #[cfg(feature = "pkg-config")]
-fn pkg_config(probe: &str, is_static: bool) -> Vec<PathBuf> {
+fn pkg_config(probe: &str, is_static: bool) -> std::result::Result<Vec<PathBuf>, pkg_config::Error> {
     let library = pkg_config::Config::new()
         .statik(is_static)
         .cargo_metadata(!cfg!(feature = "non-cargo"))
-        .probe(probe)
-        .expect(&format!("Can't probe for {} in pkg-config", probe));
-    library.include_paths
+        .probe(probe)?;
+    Ok(library.include_paths)
 }
 
 #[cfg(not(feature = "pkg-config"))]
-fn pkg_config(_probe: &str, _is_static: bool) -> Vec<PathBuf> {
+fn pkg_config(_probe: &str, _is_static: bool) -> std::result::Result<Vec<PathBuf>, std::io::Error> {
     unimplemented!()
 }
 
@@ -46,25 +45,26 @@ fn get_lib_dir(lib_name: &str) -> String {
 // `libbz2` as opposed to `libbzip2`.
 fn link_lib(lib_name: &str, alt_name: Option<&str>, pkg_name: Option<&str>) {
     #[cfg(feature = "static")]
-    const LINK_TYPE: &str = "static";
-    #[cfg(feature = "static")]
     const IS_STATIC: bool = true;
-    #[cfg(not(feature = "static"))]
-    const LINK_TYPE: &str = "dylib";
     #[cfg(not(feature = "static"))]
     const IS_STATIC: bool = false;
 
-    if cfg!(feature = "pkg-config") {
-        pkg_config(pkg_name.unwrap_or(lib_name), IS_STATIC);
-    } else {
+    if !cfg!(feature = "pkg-config") || pkg_config(pkg_name.unwrap_or(lib_name), IS_STATIC).is_err() {
         let lib_dir = get_lib_dir(lib_name);
         verify_lib_dir(&lib_dir);
         println!("cargo:rustc-link-search=native={}", lib_dir);
-        println!(
-            "cargo:rustc-link-lib={}={}",
-            LINK_TYPE,
-            alt_name.unwrap_or(lib_name)
-        );
+        let link_name = alt_name.unwrap_or(lib_name);
+        if !cfg!(feature = "static") {
+            println!(
+                "cargo:rustc-link-lib={}",
+                link_name
+            );
+        } else {
+            println!(
+                "cargo:rustc-link-lib=dylib={}",
+                link_name
+            );
+        }
     }
 }
 

@@ -17,7 +17,7 @@ exclude = [
 ]
 
 [features]
-default = ["snappy", "lz4", "zstd", "zlib", "bzip2"]
+default = ["vendor", "snappy", "lz4", "zstd", "zlib", "bzip2"]
 vendor = ["librocksdb-sys/vendor"]
 static = ["librocksdb-sys/static"]
 pkg-config = ["librocksdb-sys/pkg-configs"]
