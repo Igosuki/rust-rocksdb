@@ -1,3 +1,20 @@
+use std::path::PathBuf;
+
+#[cfg(feature = "pkg-config")]
+fn pkg_config(probe: &str, is_static: bool) -> Vec<PathBuf> {
+    let library = pkg_config::Config::new()
+        .statik(is_static)
+        .cargo_metadata(!cfg!(feature = "non-cargo"))
+        .probe(probe)
+        .expect(&format!("Can't probe for {} in pkg-config", probe));
+    library.include_paths
+}
+
+#[cfg(not(feature = "pkg-config"))]
+fn pkg_config(_probe: &str, _is_static: bool) -> Vec<PathBuf> {
+    unimplemented!()
+}
+
 fn verify_lib_dir<P: AsRef<std::path::Path>>(lib_dir: P) {
     let lib_dir = lib_dir
         .as_ref()
@@ -29,12 +46,20 @@ fn get_lib_dir(lib_name: &str) -> String {
 fn link_lib(lib_name: &str, alt_name: Option<&str>) {
     #[cfg(feature = "static")]
     const LINK_TYPE: &str = "static";
+    #[cfg(feature = "static")]
+    const IS_STATIC: bool = true;
     #[cfg(not(feature = "static"))]
     const LINK_TYPE: &str = "dylib";
+    #[cfg(not(feature = "static"))]
+    const IS_STATIC: bool = false;
 
-    let lib_dir = get_lib_dir(lib_name);
-    verify_lib_dir(&lib_dir);
-    println!("cargo:rustc-link-search=native={}", lib_dir);
+    if cfg!(feature = "pkg-config") {
+        pkg_config(lib_name, IS_STATIC);
+    } else {
+        let lib_dir = get_lib_dir(lib_name);
+        verify_lib_dir(&lib_dir);
+        println!("cargo:rustc-link-search=native={}", lib_dir);
+    }
     println!(
         "cargo:rustc-link-lib={}={}",
         LINK_TYPE,
@@ -47,12 +72,17 @@ pub fn link_dependencies() {
     link_lib("bzip2", Some("bz2"));
     #[cfg(feature = "lz4")]
     link_lib("lz4", None);
+    // liblz4
     #[cfg(feature = "snappy")]
     link_lib("snappy", None);
+    // snappy
     #[cfg(feature = "zlib")]
     link_lib("zlib", Some("z"));
+    // zlib
     #[cfg(feature = "zstd")]
     link_lib("zstd", None);
+    // "libzstd"
 
+    // rocksdb
     link_lib("rocksdb", None);
 }

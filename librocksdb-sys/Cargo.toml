@@ -14,10 +14,10 @@ build = "build/build.rs"
 links = "rocksdb"
 
 [features]
-default = [ "static" ]
 jemalloc = ["jemalloc-sys"]
 vendor = ["cc", "glob"]
 static = []
+pkg-configs = ["pkg-config"]
 snappy = []
 lz4 = []
 zstd = []
@@ -33,6 +33,7 @@ const-cstr = "0.3"
 uuid = { version = "0.8", features = ["v4"] }
 
 [build-dependencies]
-cc = { version = "^1.0", features = ["parallel"] }
+cc = { version = "^1.0", features = ["parallel"], optional = true }
 bindgen = { version = "0.59", default-features = false, features = ["runtime"] }
-glob = "0.3"
+glob = { version = "0.3", optional = true }
+pkg-config = { version = "0.3", optional = true }

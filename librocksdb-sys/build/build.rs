@@ -1,3 +1,6 @@
+use std::env;
+use std::path::PathBuf;
+
 fn rocksdb_include_dir() -> String {
     match env::var("ROCKSDB_INCLUDE_DIR") {
         Ok(val) => val,
@@ -9,16 +12,16 @@ fn bindgen_rocksdb() {
     let bindings = bindgen::Builder::default()
         .header(rocksdb_include_dir() + "/rocksdb/c.h")
         .derive_debug(false)
-        .blacklist_type("max_align_t") // https://github.com/rust-lang-nursery/rust-bindgen/issues/550
+        .blocklist_type("max_align_t") // https://github.com/rust-lang-nursery/rust-bindgen/issues/550
         .ctypes_prefix("libc")
         .size_t_is_usize(true)
         .generate()
-        .expect("Unable to generate RocksDB bindings");
-    let out_path = std::env::var("OUT_DIR").unwrap();
-    let out_path = std::path::PathBuf::from(out_path);
+        .expect("unable to generate rocksdb bindings");
+
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
         .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write RocksDB bindings!");
+        .expect("unable to write rocksdb bindings");
 }
 
 #[cfg(feature = "vendor")]

@@ -172,10 +172,10 @@ fn build_rocksdb() {
 
         if &target == "x86_64-pc-windows-gnu" {
             // Tell MinGW to create localtime_r wrapper of localtime_s function.
-            config.define("_POSIX_C_SOURCE", Some("1"));
+            build.define("_POSIX_C_SOURCE", Some("1"));
             // Tell MinGW to use at least Windows Vista headers instead of the ones of Windows XP.
             // (This is minimum supported version of rocksdb)
-            config.define("_WIN32_WINNT", Some("_WIN32_WINNT_VISTA"));
+            build.define("_WIN32_WINNT", Some("_WIN32_WINNT_VISTA"));
         }
 
         // Remove POSIX-specific sources
@@ -242,11 +242,12 @@ fn build_snappy() {
     enforce_rerun("./snappy");
     check_submodule("./snappy");
     let target = env::var("TARGET").expect("No TARGET in environment");
+    let endianness = env::var("CARGO_CFG_TARGET_ENDIAN").unwrap();
     let mut build = cc::Build::new();
 
     build.include("./snappy/").include("./");
     build.define("NDEBUG", Some("1"));
-    config.extra_warnings(false);
+    build.extra_warnings(false);
 
     if target.contains("msvc") {
         build.flag("-EHsc");
@@ -304,7 +305,7 @@ fn build_zstd() {
     build.define("ZSTD_LIB_DEPRECATED", Some("0"));
 
     build.opt_level(3);
-    compiler.extra_warnings(false);
+    build.extra_warnings(false);
 
     let globs = &[
         "./zstd/lib/common/*.c",
